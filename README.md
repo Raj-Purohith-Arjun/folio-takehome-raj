@@ -6,6 +6,15 @@ A small document-sharing app. You'll be extending it with features that customer
 
 Requires Docker (with Compose). That's it — PHP, SQLite, and everything else ship inside the container.
 
+Optional AI drafting uses OpenAI. To enable the **Draft with AI** button, export an API key before starting Docker Compose:
+
+```
+export OPENAI_API_KEY=your_key_here
+docker compose up
+```
+
+Without `OPENAI_API_KEY`, the AI button is hidden and the rest of the app works normally.
+
 ```
 docker compose up
 ```
@@ -13,6 +22,12 @@ docker compose up
 Open http://localhost:8000. The first run builds the image (~30 seconds); subsequent runs start instantly.
 
 Each `docker compose up` re-seeds `db.sqlite` from scratch, so you always start with a known state. Stop with `Ctrl+C`.
+
+To run migrations manually on an existing local database:
+
+```
+php migrate.php
+```
 
 To run the tests:
 
