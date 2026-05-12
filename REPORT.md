@@ -346,17 +346,6 @@ If quota or rate limits are hit, the app falls back to local draft mode by defau
 9. Click **Draft with AI** with no API key configured and confirm local draft text appears.
 10. Run the test suite and confirm all tests pass.
 
-## Suggested walkthrough structure
-
-For a short video or interview walkthrough, I would cover:
-
-1. The original app flow.
-2. Why scheduled publishing was the first priority.
-3. The migration approach.
-4. A demo of scheduled publishing and recipient blocking.
-5. A demo of local AI drafting and explanation of API fallback.
-6. A demo of readable share tokens and title search.
-7. Test coverage and what I would improve next.
 
 ## Final summary
 
