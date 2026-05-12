@@ -1,6 +1,6 @@
 # Folio Take-Home
 
-A small document-sharing app. You'll be extending it with features that customers have been asking for.
+A small document-sharing app. Extending it with features that customers have been asking for.
 
 
 ## What this branch adds
