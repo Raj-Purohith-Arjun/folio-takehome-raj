@@ -1,6 +1,6 @@
 # Folio Take-Home — Document Sharing Application
 
-Folio is a small PHP + SQLite document-sharing app for staff-managed documents and recipient share links. This branch turns the original starter app into a more complete product slice for the take-home assignment: scheduled publishing, easier sharing, human-readable share links, a simple migration path, tests, and an AI-assisted drafting workflow that still works without paid API quota.
+Folio is a small PHP + SQLite document-sharing app for staff-managed documents and recipient share links. This branch turns the original starter app into a more complete product slice : scheduled publishing, easier sharing, human-readable share links, a simple migration path, tests, and an AI-assisted drafting workflow
 
 ## What was asked - The Task
 
@@ -44,7 +44,7 @@ The admin form now has a **Draft with AI** button. By default, it uses a local n
 
 Why this was included:
 
-- The role is AI Product Engineer, so I wanted to show a practical AI workflow rather than only traditional CRUD changes.
+- I wanted to show a practical AI workflow rather than only traditional CRUD changes.
 - Staff at small districts often need help starting public-facing notices, packets, or announcements.
 - A local fallback keeps the feature reliable during a live review, even if an API key is missing, quota is exhausted, or a provider rate-limits the request.
 
