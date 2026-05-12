@@ -6,4 +6,12 @@ services:
       - .:/app
     ports:
       - "8000:8000"
+    environment:
+      AI_DRAFT_MODE: ${AI_DRAFT_MODE:-local}
+      AI_DRAFT_FALLBACK: ${AI_DRAFT_FALLBACK:-local}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1/chat/completions}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
     command: sh -c "php seed.php && php -S 0.0.0.0:8000 -t public/"
