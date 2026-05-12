@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/lib/bootstrap.php';
+require __DIR__ . '/lib/migrations.php';
 
 $dbPath = __DIR__ . '/db.sqlite';
 if (file_exists($dbPath)) {
@@ -9,6 +10,7 @@ if (file_exists($dbPath)) {
 
 $pdo = db();
 $pdo->exec(file_get_contents(__DIR__ . '/schema.sql'));
+run_migrations($pdo);
 
 $pdo->exec("
     INSERT INTO staff (email, name) VALUES
@@ -16,16 +18,17 @@ $pdo->exec("
 ");
 
 $stmt = $pdo->prepare('
-    INSERT INTO documents (title, body, created_by)
-    VALUES (?, ?, 1)
+    INSERT INTO documents (title, body, created_by, publish_at)
+    VALUES (?, ?, 1, ?)
 ');
 $stmt->execute([
     'Welcome Packet',
     "Welcome to Folio!\n\nThis is the body of your welcome packet.",
+    date('Y-m-d H:i:s'),
 ]);
 $docId = (int) $pdo->lastInsertId();
 
-$token = random_token();
+$token = unique_share_token();
 $stmt = $pdo->prepare('
     INSERT INTO shares (document_id, token, recipient_email)
     VALUES (?, ?, ?)
