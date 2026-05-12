@@ -1,232 +1,261 @@
-# Take-home implementation report
+# Folio take-home technical report
 
 ## Executive summary
 
-This take-home started as a small PHP + SQLite document-sharing app with a staff admin page, document creation, share-link generation, and recipient viewing. The assignment intentionally left several product decisions open, so I treated the work like a short real-world product sprint: understand the current flow, identify the highest-risk customer problem, ship a complete vertical slice first, and only then add polish or differentiators.
+Folio began as a small PHP + SQLite document-sharing app: staff could create a document, generate a tokenized share link, and recipients could view the document through that link. The take-home asked for thoughtful product work in a short timebox, with intentionally fuzzy requirements around scheduling, readable identifiers, search, and migrations.
 
-In roughly three hours of scoped work, I focused on four outcomes:
+I treated the assignment like a three-hour product sprint. The main goal was to ship a complete, reviewable slice instead of a broad rewrite. The final implementation adds scheduled publishing, a small migration system, AI-assisted drafting with a local no-cost fallback, human-readable share tokens, share-by-name search, audit logging, and tests.
 
-1. **Scheduled publishing** so staff can prepare documents ahead of time and recipients cannot read them before the publish time.
-2. **AI-assisted drafting** so staff can create a first draft faster, with a local no-cost fallback so the demo is not blocked by API quota.
-3. **Human-readable share tokens** so generated recipient links are easier to read, type, and communicate than opaque hex strings.
-4. **Share by name** so staff can find a published document by title instead of scrolling through the full document list.
+## Original problem
 
-The goal was not to build a large framework. The goal was to make minimal, understandable changes that preserve the existing app shape and keep `docker compose up` working from a fresh clone.
+The starter app had the core sharing flow, but it missed several customer-facing workflow needs:
 
-## What the original app did
+- Documents became visible immediately, so staff could not safely prepare content ahead of time.
+- Share tokens were opaque hex strings, which are hard to read, type, or communicate.
+- Staff had to find documents from a list instead of searching by title.
+- Schema changes had no migration path.
+- The app had only one lightweight test.
 
-Before changes, the app had a simple flow:
+The prompt also asked us to make judgment calls: how readable IDs should work, how scheduling and sharing interact, how migrations should be structured, and how much to build within the time limit.
 
-- `seed.php` recreated `db.sqlite` from `schema.sql` every time the app started.
-- Staff could create documents in `public/admin.php`.
-- Staff could create recipient share links in `public/share.php`.
-- Recipients could view documents by token in `public/view.php`.
-- `lib/bootstrap.php` owned the database connection, current staff lookup, audit logging, random hex tokens, and HTML escaping.
-- `tests/test.php` had a lightweight test runner with one test for seeded share resolution.
+## Three-hour prioritization
 
-That made the repo easy to reason about, so I kept the implementation consistent with the existing style: plain PHP, simple SQLite queries, no new large dependencies, and the existing test pattern.
+### Hour 1 — Foundation and scheduled publishing
 
-## Product interpretation and prioritization
+I started with scheduled publishing because it is the highest-risk product requirement. If a future document is visible too early, that can create trust and compliance problems for a public-sector tool.
 
-### 1. Scheduled publishing came first
+Work completed in this phase:
 
-I chose scheduled publishing as the first and most important feature because it is a product correctness issue. If staff schedule a document for the future, recipients must not be able to see it early. That is more important than UI polish because early visibility could break trust or compliance expectations for a public-sector tool.
+- Added a lightweight migration runner.
+- Added a `publish_at` field through a migration.
+- Added scheduling input to the admin document creation form.
+- Added a centralized publish visibility helper.
+- Blocked recipient viewing before publish time.
+- Added tests around future-dated document visibility.
 
-The minimum complete version needed:
+### Hour 2 — AI-assisted drafting
 
-- A `publish_at` field on documents.
-- A form input when creating a document.
-- A recipient-side check before showing document content.
-- Audit logging with the selected publish time.
-- Tests proving future documents are not visible.
+After the scheduling path was complete, I added an AI drafting workflow because the role is AI Product Engineer and the product benefits from staff productivity improvements.
 
-### 2. AI drafting was the differentiator, but needed a safe fallback
+The first version depended on an API key, but local testing showed quota can block demos. I changed the design so AI drafting defaults to a local no-cost draft mode and only uses an external API when explicitly configured.
 
-The original customer asks did not explicitly require AI drafting, but the role is AI Product Engineer and the assignment asks how AI-assisted work is configured and used. I added AI drafting as a practical differentiator: staff can enter a title and get a first draft for a public-facing document.
+Work completed in this phase:
 
-A real issue came up during local testing: API quota can be exhausted. To keep the app demoable, I changed the feature so it defaults to **local no-cost draft mode**. This keeps the button useful without requiring an external provider. API mode is still available through environment variables for OpenAI-compatible providers.
+- Added local no-cost draft generation.
+- Added optional OpenAI-compatible API mode.
+- Added a POST-only draft endpoint.
+- Added admin UI and JavaScript to request a draft from the title.
+- Added audit logging for AI draft usage.
+- Added tests for local mode and API-mode validation.
 
-That design gives reviewers two options:
+### Hour 3 — Sharing usability, tests, and documentation
 
-- Run the feature immediately with no key and no quota risk.
-- Opt into API mode if they want to test a real model.
+The final phase focused on workflow usability and review readiness.
 
-### 3. Human-readable share tokens were kept small and practical
+Work completed in this phase:
 
-The README asks for short readable IDs, and it leaves open whether readable IDs replace or complement share tokens. I chose readable **share tokens** because recipient links are the place where readability matters most. A token like `calm-shore-35` is easier to say and recognize than a long hex string.
+- Replaced opaque share tokens with readable slug tokens like `calm-shore-35`.
+- Added share-by-name search for published documents.
+- Added UI status labels and clearer share success messaging.
+- Expanded test coverage.
+- Documented the implementation, tradeoffs, and local run flow.
 
-This choice avoided a larger rewrite of document identity and preserved the existing recipient URL shape:
+## What was implemented
 
-```text
-/view.php?token=calm-shore-35
-```
+### 1. Scheduled publishing
 
-The UI now explicitly labels the generated token so it is clear that the human-readable part is the token itself, not the full URL.
+Staff can now set a publish date/time when creating a document. If the timestamp is in the future, recipients cannot view the document yet.
 
-### 4. Share by name was implemented as simple title search
+Key behavior:
 
-For a small SQLite app, exact/prefix/partial matching is enough and easy to explain. I avoided fuzzy search because it would add complexity without much benefit for a three-hour assignment. Search only returns published documents, which avoids encouraging staff to share future-scheduled documents before they are ready.
+- New documents default to publishing immediately.
+- Future documents show as scheduled in the admin table.
+- Recipient view checks publish time before showing document content.
+- Future-scheduled documents cannot be shared from the share page until they are published.
+- `publish_at` is included in audit details for document creation.
 
-## What changed, by area
-
-### Database and migrations
-
-I added a tiny migration system instead of editing `schema.sql` directly for the new column. This matches the assignment requirement that schema changes go through migration files.
-
-Files added or changed:
+Main files:
 
 - `migrations/001_add_publish_at.sql`
-- `lib/migrations.php`
-- `migrate.php`
-- `seed.php`
-
-The migration adds `documents.publish_at`, backfills existing rows to their `created_at`, and creates an index. `seed.php` now loads the original schema and then runs migrations, so fresh Docker startup still works.
-
-Why this approach:
-
-- It is small enough for the repo.
-- It is safe to re-run.
-- It avoids introducing a full migration framework.
-- It keeps the reviewer flow simple: `docker compose up` still starts from a known database state.
-
-### Scheduled publishing
-
-Files changed:
-
 - `lib/bootstrap.php`
 - `public/admin.php`
 - `public/share.php`
 - `public/view.php`
 - `tests/test.php`
 
-What was added:
+### 2. Lightweight migrations
 
-- `normalize_publish_at()` converts the HTML datetime value into a SQLite-friendly timestamp and defaults to now.
-- `is_published()` centralizes the visibility check.
-- The admin form includes a `datetime-local` input.
-- The documents table shows `Published` or `Scheduled` status.
-- The recipient view returns a not-yet-available message if the document is still scheduled.
-- The share flow does not allow creating new shares for future-dated documents.
+The assignment required schema changes to go through migrations. I added a small SQL-file migration system instead of bringing in a framework.
 
-Why this design:
+Key behavior:
 
-- Visibility logic is centralized in a helper instead of duplicated everywhere.
-- Existing immediate-publish behavior is preserved by defaulting to now.
-- Staff can still prepare future documents without exposing them early.
+- `lib/migrations.php` applies migration files in order.
+- `migrate.php` can run migrations manually.
+- `seed.php` loads `schema.sql` and then runs migrations so Docker startup still works from a fresh clone.
+- Applied migrations are recorded in a `migrations` table.
 
-### AI drafting
+Main files:
 
-Files changed or added:
+- `lib/migrations.php`
+- `migrate.php`
+- `migrations/001_add_publish_at.sql`
+- `seed.php`
+
+Why this approach:
+
+- It satisfies the requirement without overengineering.
+- It is easy to inspect during review.
+- It keeps the original simple Docker workflow intact.
+
+### 3. AI-assisted drafting with local fallback
+
+The admin form includes a **Draft with AI** button. Staff enter a title, click the button, and the app fills the body field with a first draft for review.
+
+Key behavior:
+
+- Default mode is local and no-cost, so no API key is required.
+- API mode can be enabled with environment variables.
+- API quota or rate-limit errors fall back to local draft mode by default.
+- Draft events are audit logged with source/model metadata.
+- Staff still review and edit the text before saving the document.
+
+Main files:
 
 - `lib/bootstrap.php`
 - `public/draft_api.php`
 - `public/admin.php`
 - `docker-compose.yml`
 - `Dockerfile`
-- `README.md`
 - `tests/test.php`
 
-What was added:
+Why this approach:
 
-- `ai_draft_mode()` chooses local or API mode.
-- `local_draft()` provides a no-cost draft template.
-- `ai_draft()` returns draft body plus metadata such as `source` and `model`.
-- `public/draft_api.php` exposes a POST-only JSON endpoint.
-- The admin page has a **Draft with AI** button and JavaScript `fetch()` call.
-- API mode supports `AI_API_KEY`, `OPENAI_API_KEY`, `AI_API_BASE_URL`, `AI_MODEL`, and local fallback for quota/rate-limit responses.
-- Audit logs capture AI draft usage with source/model details.
+- It demonstrates an AI workflow without making the demo fragile.
+- It avoids blocking reviewers on API keys, billing, or quota.
+- It keeps humans in control of public-sector content.
 
-Why this design:
+### 4. Human-readable share tokens
 
-- The app remains usable without API keys.
-- The demo is not blocked by quota errors.
-- API mode can work with OpenAI or another OpenAI-compatible provider.
-- The user must still review the generated text before saving, which is important for public-sector content.
+New share links use readable tokens instead of long hex strings.
 
-### Human-readable share tokens
+Example:
 
-Files changed:
+```text
+http://localhost:8000/view.php?token=calm-shore-35
+```
+
+Key behavior:
+
+- `slug_token()` generates adjective-noun-number tokens.
+- `unique_share_token()` checks the database to avoid collisions.
+- The share success banner shows both the readable token and full URL.
+- Seed data also uses readable tokens.
+
+Main files:
 
 - `lib/bootstrap.php`
 - `seed.php`
 - `public/share.php`
 - `tests/test.php`
 
-What was added:
+Why this approach:
 
-- `slug_token()` creates tokens like `cobalt-river-47`.
-- `unique_share_token()` checks the database to avoid collisions.
-- New shares use readable slug tokens instead of long hex strings.
-- The success banner separately shows the token and the full share URL.
+- The recipient link is the part users actually copy and communicate.
+- It improves usability without changing document primary keys or route structure.
+- It keeps recipient access token-based rather than exposing numeric document IDs.
 
-Why this design:
+### 5. Share by name
 
-- It improves readability where staff and recipients actually see links.
-- It avoids changing document primary keys or rebuilding all routes.
-- It keeps token-based recipient access, which is still better than exposing plain numeric document IDs to recipients.
+Staff can search for a published document before creating a share link.
 
-### Share by name
+Key behavior:
 
-Files changed:
+- Search by title or ID.
+- Results prefer exact title matches, then prefix matches, then partial matches.
+- Only published documents appear in search results.
+
+Main files:
 
 - `public/admin.php`
 - `public/share.php`
 - `tests/test.php`
 
-What was added:
+Why this approach:
 
-- A **Find by title** link from the admin document list.
-- A search form on the share page.
-- Matching by title or ID.
-- Ordering that prefers exact title match, then title prefix, then partial matches.
-- Filtering so only published documents appear in results.
+- It solves the customer workflow problem directly.
+- It is predictable and easy to test.
+- It avoids heavier fuzzy-search dependencies that are not needed for this app size.
 
-Why this design:
+### 6. Tests
 
-- It solves the immediate staff workflow problem.
-- It is transparent and easy to test.
-- It avoids heavier fuzzy-search dependencies.
+The original repo used a small custom PHP test runner. I kept that style and expanded it.
 
-### Tests
-
-The original test runner was intentionally lightweight, so I expanded it rather than adding PHPUnit. The test suite now covers:
+Current coverage includes:
 
 - Seeded share link resolution.
-- Human-readable slug token format.
+- Human-readable token format.
 - Share-by-slug document resolution.
 - Future-dated document visibility blocking.
 - Audit logging for scheduled document creation.
-- Share-by-name title search.
-- Local no-cost AI drafting without an API key.
+- Share-by-name search.
+- Local AI drafting without an API key.
 - API draft mode validation when no key is configured.
 
-This gives coverage for each shipped feature while staying close to the repo’s original testing style.
+Run tests with:
 
-## Important tradeoffs and decisions
+```bash
+php tests/test.php
+```
 
-### I did not build a full authentication system
+or inside Docker:
 
-The original app assumes `current_staff()` returns staff ID 1. I kept that pattern because auth was outside the assignment and changing it would take time away from the customer asks.
+```bash
+docker compose exec app php tests/test.php
+```
 
-### I did not add a heavy migration framework
+## Technical design notes
 
-A full migration tool would be overkill here. The simple numbered SQL file approach is enough for one SQLite database and easy for reviewers to inspect.
+### Scheduling model
 
-### I used local AI fallback instead of requiring a paid model
+I chose a single `publish_at` timestamp on `documents`. This is enough for the requested behavior and keeps the data model simple. The helper `is_published()` centralizes the rule so the admin, share, and recipient flows do not each invent their own visibility logic.
 
-After hitting quota, it became clear the AI feature needed to be demo-safe. Local mode gives the product experience without external risk. API mode is still there for reviewers who want to test with a provider.
+### Token model
 
-### I used readable share tokens instead of replacing document IDs
+I kept the existing token-based recipient view and changed the token shape from hex to readable slug. This provides user-facing readability while preserving the privacy benefits of tokenized access.
 
-Readable document IDs could be useful, but replacing document identity would touch more routes and create more ambiguity around privacy. Human-readable share tokens provide visible customer value with less risk.
+### AI model integration
 
-### I kept search simple
+I avoided making the app depend on a paid external model for the default path. Local mode is deterministic and reliable for review. API mode remains available through environment variables for OpenAI-compatible providers.
 
-Exact/prefix/partial search is not perfect, but it is predictable. For this app size and timeline, predictability beats fuzzy magic.
+### Search model
 
-## How to run locally
+I used SQL `LIKE` matching with explicit ordering. That is enough for this data size and easier to explain than fuzzy matching.
 
-Start the app with Docker:
+### Migration model
+
+I used numbered SQL migrations with a simple tracking table. This is not a full production migration framework, but it is appropriate for a small PHP/SQLite take-home and satisfies the assignment requirement.
+
+## Tradeoffs and intentionally scoped-out work
+
+### Not built in this timebox
+
+- Editing or rescheduling existing documents.
+- Staff authentication and sessions.
+- CSRF protection.
+- Share expiration and revocation.
+- Recipient access analytics.
+- Admin audit-log viewer.
+- Browser-level end-to-end tests.
+- Pagination for large document lists.
+- Stronger readable-token entropy for high-volume production usage.
+
+### Why these were deferred
+
+These are valuable improvements, but they are not required to prove the requested product behavior. In a three-hour assignment, finishing the end-to-end scheduled publishing path and making the app easy to run/test was more important than starting several partially complete features.
+
+## Local run guide
+
+Start the app:
 
 ```bash
 docker compose up --build
@@ -238,74 +267,97 @@ Open:
 http://localhost:8000
 ```
 
-Run tests from another terminal:
+Run in the background:
+
+```bash
+docker compose up --build -d
+```
+
+View logs:
+
+```bash
+docker compose logs -f app
+```
+
+Stop the app:
+
+```bash
+docker compose down
+```
+
+Run tests:
 
 ```bash
 docker compose exec app php tests/test.php
 ```
 
-Run migrations manually on an existing database:
+Run migrations manually:
 
 ```bash
 php migrate.php
 ```
 
-Use local no-cost AI drafting, the default:
+## AI configuration
+
+### Default local mode
+
+No key is needed:
 
 ```bash
 docker compose up --build
 ```
 
-Use API drafting instead:
+Then enter a title in the admin form and click **Draft with AI**.
+
+### Optional API mode
+
+Mac/Linux:
 
 ```bash
 export AI_DRAFT_MODE=api
 export AI_API_KEY=your_key_here
-# Optional: export AI_API_BASE_URL=https://provider.example/v1/chat/completions
-# Optional: export AI_MODEL=provider-model-name
+export AI_MODEL=gpt-4o-mini
+export AI_API_BASE_URL=https://api.openai.com/v1/chat/completions
 docker compose up --build
 ```
 
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 $env:AI_DRAFT_MODE="api"
 $env:AI_API_KEY="your_key_here"
+$env:AI_MODEL="gpt-4o-mini"
+$env:AI_API_BASE_URL="https://api.openai.com/v1/chat/completions"
 docker compose up --build
 ```
 
+If quota or rate limits are hit, the app falls back to local draft mode by default.
+
 ## Manual verification checklist
 
-1. Open the admin page and confirm the seeded Welcome Packet appears.
-2. Create a document with the default publish time and confirm it shows as published.
-3. Generate a share link and confirm the token is readable, for example `calm-shore-35`.
-4. Open the generated recipient link and confirm the document body is visible.
-5. Create a future-scheduled document and confirm it shows as scheduled.
-6. Try to share the scheduled document and confirm the app prevents it until publish time.
-7. Use **Find by title** to search for a published document and create a share from the result.
-8. Click **Draft with AI** with no API key configured and confirm local draft text appears.
-9. Optionally enable API mode and confirm quota/rate-limit errors fall back to local draft mode.
-10. Run `docker compose exec app php tests/test.php` and confirm all tests pass.
+1. Open `http://localhost:8000/admin.php`.
+2. Confirm the seeded Welcome Packet appears.
+3. Create a document with the default publish time and confirm it shows as published.
+4. Generate a share link and confirm the token is readable, for example `calm-shore-35`.
+5. Open the generated recipient link and confirm the document body is visible.
+6. Create a document with a future publish time and confirm it shows as scheduled.
+7. Try to share the scheduled document and confirm the app prevents it until publish time.
+8. Use **Find by title** to search for a published document and create a share from the result.
+9. Click **Draft with AI** with no API key configured and confirm local draft text appears.
+10. Run the test suite and confirm all tests pass.
 
-## What I would improve with more time
+## Suggested walkthrough structure
 
-- Add edit/reschedule support for existing documents, not just scheduling at creation time.
-- Add a real staff login/session model instead of the fixed staff record.
-- Add CSRF protection to forms and the draft endpoint.
-- Add a share expiration or revoke feature.
-- Add a clearer audit log viewer in the admin UI.
-- Add browser-level tests for the main flows.
-- Add pagination for larger document lists.
-- Consider stronger readable-token entropy if the app becomes high volume.
+For a short video or interview walkthrough, I would cover:
 
-## Video walkthrough outline
-
-For a 5-minute walkthrough, I would cover:
-
-1. The original app flow and where I made changes.
+1. The original app flow.
 2. Why scheduled publishing was the first priority.
-3. The migration approach and why it is intentionally small.
-4. A demo of creating a scheduled document and recipient blocking.
-5. A demo of local no-cost AI drafting and API fallback reasoning.
-6. A demo of human-readable share tokens and share-by-name search.
-7. The tests and what I would improve with more time.
+3. The migration approach.
+4. A demo of scheduled publishing and recipient blocking.
+5. A demo of local AI drafting and explanation of API fallback.
+6. A demo of readable share tokens and title search.
+7. Test coverage and what I would improve next.
+
+## Final summary
+
+This implementation keeps the app small while making it more complete. Scheduled publishing protects recipient visibility, readable share tokens improve usability, share-by-name speeds up staff workflows, and AI drafting adds a product differentiator without depending on external quota. The migration runner and expanded tests make the changes easier to review and safer to extend.
