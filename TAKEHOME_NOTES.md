@@ -7,7 +7,7 @@ The assignment is intentionally open-ended: understand the existing document-sha
 ## Three-hour prioritization
 
 1. **Scheduled publishing** is the highest product-completeness risk because recipients must not see a document before its intended publish time.
-2. **AI document drafting** is the differentiator: it helps district staff start compliant public-facing documents faster, but gracefully disappears when `OPENAI_API_KEY` is not configured.
+2. **AI document drafting** is the differentiator: it helps district staff start public-facing documents faster and defaults to a local no-cost draft mode so quota issues do not block the demo.
 3. **Human-readable share tokens** improve usability for links people may read aloud or paste into emails while keeping the feature small enough to verify.
 4. **Share by name** remains a pragmatic title search for published documents only, using exact, prefix, then partial matching.
 
@@ -16,8 +16,9 @@ The assignment is intentionally open-ended: understand the existing document-sha
 ```bash
 git clone <your-fork-url>
 cd folio-takehome
-# Optional, only if testing AI drafting:
-export OPENAI_API_KEY=your_key_here
+# Optional, only if testing an OpenAI-compatible API instead of local no-cost drafts:
+export AI_DRAFT_MODE=api
+export AI_API_KEY=your_key_here
 docker compose up --build
 ```
 
@@ -39,5 +40,5 @@ php tests/test.php
 
 1. Create a document with no publish time and confirm its generated slug share link opens immediately.
 2. Create a document with a future publish time and confirm the share page does not allow sharing yet; the automated tests also cover the recipient not-yet-available guard for any pre-created future share token.
-3. Set `OPENAI_API_KEY`, restart Docker Compose, enter a title, and confirm **Draft with AI** fills the body and logs an `ai_draft` audit event.
+3. Enter a title and confirm **Draft with AI** fills the body in local no-cost mode; optionally set `AI_DRAFT_MODE=api` and `AI_API_KEY` to test an OpenAI-compatible API.
 4. Use **Find by title** on the admin page to search by part of a published title and create a share from the result.

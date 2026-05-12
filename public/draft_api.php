@@ -23,9 +23,14 @@ if ($title === '') {
 }
 
 try {
-    $body = ai_draft($title);
-    audit_log('ai_draft', 'document', 0, ['title' => $title]);
-    echo json_encode(['body' => $body]);
+    $draft = ai_draft($title);
+    audit_log('ai_draft', 'document', 0, [
+        'title' => $title,
+        'source' => $draft['source'],
+        'model' => $draft['model'],
+        'fallback_error' => $draft['error'] ?? null,
+    ]);
+    echo json_encode($draft);
 } catch (RuntimeException $e) {
     http_response_code(500);
     echo json_encode(['error' => $e->getMessage()]);

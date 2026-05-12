@@ -146,19 +146,45 @@ test('share-by-name search finds published partial title matches', function () {
     assert_true(in_array($docId, $ids, true), 'expected title search to include created document');
 });
 
-test('ai drafting requires OPENAI_API_KEY when not configured', function () {
-    $previous = getenv('OPENAI_API_KEY');
+test('ai drafting works in local no-cost mode without an api key', function () {
+    $previousMode = getenv('AI_DRAFT_MODE');
+    $previousKey = getenv('AI_API_KEY');
+    $previousOpenAiKey = getenv('OPENAI_API_KEY');
+
+    putenv('AI_DRAFT_MODE=local');
+    putenv('AI_API_KEY');
+    putenv('OPENAI_API_KEY');
+
+    try {
+        $draft = ai_draft('Public Notice');
+        assert_same($draft['source'], 'local', 'draft source');
+        assert_true(str_contains($draft['body'], 'Public Notice'), 'local draft should reference title');
+    } finally {
+        $previousMode !== false ? putenv('AI_DRAFT_MODE=' . $previousMode) : putenv('AI_DRAFT_MODE');
+        $previousKey !== false ? putenv('AI_API_KEY=' . $previousKey) : putenv('AI_API_KEY');
+        $previousOpenAiKey !== false ? putenv('OPENAI_API_KEY=' . $previousOpenAiKey) : putenv('OPENAI_API_KEY');
+    }
+});
+
+
+test('api draft mode requires an api key', function () {
+    $previousMode = getenv('AI_DRAFT_MODE');
+    $previousKey = getenv('AI_API_KEY');
+    $previousOpenAiKey = getenv('OPENAI_API_KEY');
+
+    putenv('AI_DRAFT_MODE=api');
+    putenv('AI_API_KEY');
     putenv('OPENAI_API_KEY');
 
     try {
         ai_draft('Public Notice');
-        throw new RuntimeException('expected ai_draft to fail without OPENAI_API_KEY');
+        throw new RuntimeException('expected api draft mode to fail without an api key');
     } catch (RuntimeException $e) {
-        assert_true(str_contains($e->getMessage(), 'OPENAI_API_KEY'), 'unexpected error: ' . $e->getMessage());
+        assert_true(str_contains($e->getMessage(), 'AI_API_KEY') || str_contains($e->getMessage(), 'OPENAI_API_KEY'), 'unexpected error: ' . $e->getMessage());
     } finally {
-        if ($previous !== false) {
-            putenv('OPENAI_API_KEY=' . $previous);
-        }
+        $previousMode !== false ? putenv('AI_DRAFT_MODE=' . $previousMode) : putenv('AI_DRAFT_MODE');
+        $previousKey !== false ? putenv('AI_API_KEY=' . $previousKey) : putenv('AI_API_KEY');
+        $previousOpenAiKey !== false ? putenv('OPENAI_API_KEY=' . $previousOpenAiKey) : putenv('OPENAI_API_KEY');
     }
 });
 

@@ -134,8 +134,8 @@ render_header($doc ? 'Share · ' . $doc['title'] : 'Find document to share', $st
 
     <?php if ($created_token): ?>
         <div class="banner banner-success">
-            Share link ready:
-            <code>http://<?= h($_SERVER['HTTP_HOST']) ?>/view.php?token=<?= h($created_token) ?></code>
+            <p><strong>Human-readable token:</strong> <code><?= h($created_token) ?></code></p>
+            <p>Share link ready: <code>http://<?= h($_SERVER['HTTP_HOST']) ?>/view.php?token=<?= h($created_token) ?></code></p>
         </div>
     <?php endif ?>
 

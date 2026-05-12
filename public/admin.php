@@ -5,7 +5,8 @@ require __DIR__ . '/../lib/layout.php';
 
 $staff = current_staff();
 $error = null;
-$aiEnabled = getenv('OPENAI_API_KEY') !== false && getenv('OPENAI_API_KEY') !== '';
+$aiEnabled = ai_draft_enabled();
+$aiDraftLabel = ai_draft_label();
 $defaultPublishAt = date('Y-m-d\TH:i');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -74,9 +75,7 @@ render_header('Admin', $staff);
             <textarea id="body" name="body" required></textarea>
             <?php if ($aiEnabled): ?>
                 <button type="button" class="btn btn-secondary" id="draft-ai">Draft with AI</button>
-                <p class="field-help" id="draft-status">Uses OPENAI_API_KEY to generate a first draft. Review before publishing.</p>
-            <?php else: ?>
-                <p class="field-help">Set OPENAI_API_KEY to enable AI-assisted drafting.</p>
+                <p class="field-help" id="draft-status">Uses <?= h($aiDraftLabel) ?>. Review before publishing.</p>
             <?php endif ?>
         </div>
         <div class="form-field">
@@ -158,7 +157,8 @@ draftButton?.addEventListener('click', async () => {
             throw new Error(data.error || 'Draft request failed.');
         }
         bodyInput.value = data.body;
-        draftStatus.textContent = 'Draft inserted. Please review before saving.';
+        const source = data.source ? ` (${data.source})` : '';
+        draftStatus.textContent = `Draft inserted${source}. Please review before saving.`;
     } catch (error) {
         draftStatus.textContent = error.message;
     } finally {

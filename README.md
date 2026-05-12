@@ -6,18 +6,22 @@ A small document-sharing app. You'll be extending it with features that customer
 
 Requires Docker (with Compose). That's it — PHP, SQLite, and everything else ship inside the container.
 
-Optional AI drafting uses OpenAI. To enable the **Draft with AI** button, export an API key before starting Docker Compose:
-
-```
-export OPENAI_API_KEY=your_key_here
-docker compose up
-```
-
-Without `OPENAI_API_KEY`, the AI button is hidden and the rest of the app works normally.
+AI drafting defaults to a local no-cost template mode, so the **Draft with AI** button works even without an API key or paid quota:
 
 ```
 docker compose up
 ```
+
+To use an OpenAI-compatible API instead, set API mode and credentials before starting Docker Compose:
+
+```
+export AI_DRAFT_MODE=api
+export AI_API_KEY=your_key_here
+# Optional: override AI_API_BASE_URL or AI_MODEL for another OpenAI-compatible provider/model.
+docker compose up
+```
+
+If an API request hits quota or rate limits, the app falls back to the local template draft by default.
 
 Open http://localhost:8000. The first run builds the image (~30 seconds); subsequent runs start instantly.
 

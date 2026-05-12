@@ -97,17 +97,51 @@ function is_published(array $doc): bool {
     return strtotime($doc['publish_at']) <= time();
 }
 
-function ai_draft(string $title): string {
-    $apiKey = getenv('OPENAI_API_KEY');
-    if (!$apiKey) {
-        throw new RuntimeException('OPENAI_API_KEY is not configured on this server.');
-    }
-    if (!function_exists('curl_init')) {
-        throw new RuntimeException('The PHP curl extension is required for AI drafting.');
+function ai_draft_mode(): string {
+    $mode = strtolower(trim(getenv('AI_DRAFT_MODE') ?: ''));
+    if ($mode === '') {
+        return (getenv('AI_API_KEY') || getenv('OPENAI_API_KEY')) ? 'api' : 'local';
     }
 
+    return $mode === 'api' ? 'api' : 'local';
+}
+
+function ai_draft_enabled(): bool {
+    return ai_draft_mode() === 'local' || getenv('AI_API_KEY') || getenv('OPENAI_API_KEY');
+}
+
+function ai_draft_label(): string {
+    return ai_draft_mode() === 'local' ? 'local no-cost draft mode' : 'API draft mode';
+}
+
+function local_draft(string $title): string {
+    $safeTitle = trim($title) !== '' ? trim($title) : 'this notice';
+
+    return "This draft provides clear public information about {$safeTitle}. Please review the details below and update any dates, locations, contact information, or district-specific requirements before publishing.\n\nOur goal is to make this information easy for residents, board members, and staff to understand. If this document describes a service change, meeting, maintenance window, or policy update, include who is affected, what action is needed, and where readers can find help.\n\nFor questions, please contact the district office during regular business hours. This draft should be reviewed by staff before it is shared publicly.";
+}
+
+function ai_draft(string $title): array {
+    if (ai_draft_mode() === 'local') {
+        return [
+            'body' => local_draft($title),
+            'source' => 'local',
+            'model' => 'local-template',
+        ];
+    }
+
+    $apiKey = getenv('AI_API_KEY') ?: getenv('OPENAI_API_KEY');
+    if (!$apiKey) {
+        throw new RuntimeException('Set AI_DRAFT_MODE=local for no-cost local drafts, or configure AI_API_KEY/OPENAI_API_KEY for API drafting.');
+    }
+    if (!function_exists('curl_init')) {
+        throw new RuntimeException('The PHP curl extension is required for API drafting.');
+    }
+
+    $model = getenv('AI_MODEL') ?: getenv('OPENAI_MODEL') ?: 'gpt-4o-mini';
+    $endpoint = getenv('AI_API_BASE_URL') ?: 'https://api.openai.com/v1/chat/completions';
+
     $payload = json_encode([
-        'model' => 'gpt-4o-mini',
+        'model' => $model,
         'max_tokens' => 512,
         'temperature' => 0.7,
         'messages' => [
@@ -123,10 +157,10 @@ function ai_draft(string $title): string {
     ]);
 
     if ($payload === false) {
-        throw new RuntimeException('Could not encode OpenAI request payload.');
+        throw new RuntimeException('Could not encode AI request payload.');
     }
 
-    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    $ch = curl_init($endpoint);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
@@ -144,21 +178,35 @@ function ai_draft(string $title): string {
     curl_close($ch);
 
     if ($raw === false) {
-        throw new RuntimeException('Could not reach OpenAI API: ' . $curlError);
+        throw new RuntimeException('Could not reach AI API: ' . $curlError);
     }
 
     $data = json_decode($raw, true);
     if ($httpCode !== 200) {
-        $message = $data['error']['message'] ?? 'HTTP ' . $httpCode . ' from OpenAI';
-        throw new RuntimeException('OpenAI error: ' . $message);
+        $message = $data['error']['message'] ?? 'HTTP ' . $httpCode . ' from AI API';
+        $allowLocalFallback = strtolower(getenv('AI_DRAFT_FALLBACK') ?: 'local') === 'local';
+        if ($allowLocalFallback && ($httpCode === 429 || stripos($message, 'quota') !== false || stripos($message, 'rate limit') !== false)) {
+            return [
+                'body' => local_draft($title),
+                'source' => 'local-fallback',
+                'model' => 'local-template',
+                'error' => $message,
+            ];
+        }
+
+        throw new RuntimeException('AI API error: ' . $message);
     }
 
     $body = trim($data['choices'][0]['message']['content'] ?? '');
     if ($body === '') {
-        throw new RuntimeException('OpenAI returned an empty response.');
+        throw new RuntimeException('AI API returned an empty response.');
     }
 
-    return $body;
+    return [
+        'body' => $body,
+        'source' => 'api',
+        'model' => $model,
+    ];
 }
 
 function h(string $s): string {
