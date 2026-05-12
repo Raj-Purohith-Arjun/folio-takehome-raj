@@ -1,4 +1,4 @@
-# Folio Take-Home — Implementation README
+# Folio Take-Home — Document Sharing Application
 
 Folio is a small PHP + SQLite document-sharing app for staff-managed documents and recipient share links. This branch turns the original starter app into a more complete product slice for the take-home assignment: scheduled publishing, easier sharing, human-readable share links, a simple migration path, tests, and an AI-assisted drafting workflow that still works without paid API quota.
 
