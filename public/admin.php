@@ -5,22 +5,37 @@ require __DIR__ . '/../lib/layout.php';
 
 $staff = current_staff();
 $error = null;
+$aiEnabled = ai_draft_enabled();
+$aiDraftLabel = ai_draft_label();
+$defaultPublishAt = date('Y-m-d\TH:i');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = trim($_POST['title'] ?? '');
     $body = trim($_POST['body'] ?? '');
 
-    if ($title === '' || $body === '') {
+    try {
+        $publishAt = normalize_publish_at($_POST['publish_at'] ?? '');
+    } catch (InvalidArgumentException $e) {
+        $publishAt = date('Y-m-d H:i:s');
+        $error = $e->getMessage();
+    }
+
+    if ($error === null && ($title === '' || $body === '')) {
         $error = 'Title and body are required.';
-    } else {
+    }
+
+    if ($error === null) {
         $stmt = db()->prepare('
-            INSERT INTO documents (title, body, created_by)
-            VALUES (?, ?, ?)
+            INSERT INTO documents (title, body, created_by, publish_at)
+            VALUES (?, ?, ?, ?)
         ');
-        $stmt->execute([$title, $body, $staff['id']]);
+        $stmt->execute([$title, $body, $staff['id'], $publishAt]);
         $docId = (int) db()->lastInsertId();
 
-        audit_log('create', 'document', $docId, ['title' => $title]);
+        audit_log('create', 'document', $docId, [
+            'title' => $title,
+            'publish_at' => $publishAt,
+        ]);
 
         header('Location: /admin.php?created=' . $docId);
         exit;
@@ -38,7 +53,7 @@ render_header('Admin', $staff);
 ?>
 
 <h1 class="page-title">Admin</h1>
-<p class="page-subtitle">Create documents and generate share links for recipients.</p>
+<p class="page-subtitle">Create documents, optionally draft with AI, schedule publishing, and generate share links for recipients.</p>
 
 <?php if (!empty($_GET['created'])): ?>
     <div class="banner banner-success">Document #<?= (int) $_GET['created'] ?> created.</div>
@@ -58,13 +73,25 @@ render_header('Admin', $staff);
         <div class="form-field">
             <label for="body">Body</label>
             <textarea id="body" name="body" required></textarea>
+            <?php if ($aiEnabled): ?>
+                <button type="button" class="btn btn-secondary" id="draft-ai">Draft with AI</button>
+                <p class="field-help" id="draft-status">Uses <?= h($aiDraftLabel) ?>. Review before publishing.</p>
+            <?php endif ?>
+        </div>
+        <div class="form-field">
+            <label for="publish_at">Publish at <span class="label-hint">optional</span></label>
+            <input type="datetime-local" id="publish_at" name="publish_at" value="<?= h($defaultPublishAt) ?>">
+            <p class="field-help">Defaults to now. Set a future time to show recipients a not-yet-available message until publish time.</p>
         </div>
         <button type="submit" class="btn">Create document</button>
     </form>
 </section>
 
 <section class="card">
-    <h2 class="card-title">Documents</h2>
+    <div class="section-heading">
+        <h2 class="card-title">Documents</h2>
+        <a href="/share.php" class="btn-link">Find by title →</a>
+    </div>
     <?php if (empty($docs)): ?>
         <p class="empty">No documents yet.</p>
     <?php else: ?>
@@ -73,6 +100,7 @@ render_header('Admin', $staff);
                 <tr>
                     <th>ID</th>
                     <th>Title</th>
+                    <th>Status</th>
                     <th>Creator</th>
                     <th>Created</th>
                     <th></th>
@@ -83,6 +111,13 @@ render_header('Admin', $staff);
                     <tr>
                         <td class="id">#<?= (int) $d['id'] ?></td>
                         <td><?= h($d['title']) ?></td>
+                        <td>
+                            <?php if (is_published($d)): ?>
+                                <span class="status status-live">Published</span>
+                            <?php else: ?>
+                                <span class="status status-scheduled">Scheduled for <?= h($d['publish_at']) ?></span>
+                            <?php endif ?>
+                        </td>
                         <td><?= h($d['creator_name']) ?></td>
                         <td><?= h($d['created_at']) ?></td>
                         <td><a href="/share.php?doc=<?= (int) $d['id'] ?>" class="btn-link">Create share →</a></td>
@@ -92,5 +127,45 @@ render_header('Admin', $staff);
         </table>
     <?php endif ?>
 </section>
+
+<?php if ($aiEnabled): ?>
+<script>
+const draftButton = document.getElementById('draft-ai');
+const titleInput = document.getElementById('title');
+const bodyInput = document.getElementById('body');
+const draftStatus = document.getElementById('draft-status');
+
+draftButton?.addEventListener('click', async () => {
+    const title = titleInput.value.trim();
+    if (!title) {
+        draftStatus.textContent = 'Enter a title before drafting.';
+        titleInput.focus();
+        return;
+    }
+
+    draftButton.disabled = true;
+    draftStatus.textContent = 'Drafting…';
+
+    try {
+        const response = await fetch('/draft_api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({title}),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Draft request failed.');
+        }
+        bodyInput.value = data.body;
+        const source = data.source ? ` (${data.source})` : '';
+        draftStatus.textContent = `Draft inserted${source}. Please review before saving.`;
+    } catch (error) {
+        draftStatus.textContent = error.message;
+    } finally {
+        draftButton.disabled = false;
+    }
+});
+</script>
+<?php endif ?>
 
 <?php render_footer(); ?>
