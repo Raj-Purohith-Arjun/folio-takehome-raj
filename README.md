@@ -2,15 +2,15 @@
 
 Folio is a small PHP + SQLite document-sharing app for staff-managed documents and recipient share links. This branch turns the original starter app into a more complete product slice for the take-home assignment: scheduled publishing, easier sharing, human-readable share links, a simple migration path, tests, and an AI-assisted drafting workflow that still works without paid API quota.
 
-## What was asked
+## What was asked - The Task
 
-The original prompt asked for a thoughtful implementation in about three hours, not a rushed full rebuild. Customers wanted three main improvements:
+A thoughtful implementation in about three hours, not a rushed full rebuild. Customers wanted three main improvements:
 
 1. **Scheduled publishing** — staff should be able to prepare a document now and make it visible to recipients later.
 2. **Human-readable IDs / links** — links should be easier for people to read, say out loud, type, or paste into an email.
 3. **Share by name** — staff should be able to find a document by title instead of scrolling a list.
 
-The prompt also required:
+The task also required:
 
 - Schema changes through migration files.
 - Tests for built features.
